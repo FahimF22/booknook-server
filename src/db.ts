@@ -36,7 +36,11 @@ let db: Db | null = null;
 export async function getDb(): Promise<Db> {
   if (!db) {
     await client.connect();
-    db = client.db(process.env.DB_NAME || "booknook");
+    const database = client.db(process.env.DB_NAME || "booknook");
+    // One active borrow per user per book (backs up the "no double borrow" check)
+    await database.collection("borrows").createIndex({ bookId: 1, userEmail: 1 }, { unique: true });
+    await database.collection("books").createIndex({ createdAt: -1 });
+    db = database;
   }
   return db;
 }

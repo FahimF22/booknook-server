@@ -3,6 +3,7 @@ import cors from "cors";
 import "dotenv/config";
 import { getDb } from "./db.js";
 import booksRouter from "./routes/books.js";
+import borrowsRouter from "./routes/borrows.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -20,6 +21,7 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/books", booksRouter);
+app.use("/borrows", borrowsRouter);
 
 getDb()
   .then(async (db) => {
