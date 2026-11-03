@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ObjectId, type Filter } from "mongodb";
-import { booksCollection, type Book } from "../db.js";
+import { booksCollection, borrowsCollection, type Book } from "../db.js";
 import { verifyToken } from "../middleware/verifyToken.js";
 
 const router = Router();
@@ -80,6 +80,57 @@ router.post("/", verifyToken, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).send({ message: "Failed to add the book" });
+  }
+});
+
+// Loads a book and checks that the logged-in user added it.
+async function findOwnedBook(id: string, email: string) {
+  if (!ObjectId.isValid(id)) return { status: 400, message: "Invalid book id" } as const;
+  const book = await (await booksCollection()).findOne({ _id: new ObjectId(id) });
+  if (!book) return { status: 404, message: "Book not found" } as const;
+  if (book.addedBy.email !== email) {
+    return { status: 403, message: "You can only change books you added" } as const;
+  }
+  return { book };
+}
+
+// PATCH /books/:id — private, owner only
+router.patch("/:id", verifyToken, async (req, res) => {
+  try {
+    const found = await findOwnedBook(String(req.params.id), req.user!.email);
+    if (!found.book) return res.status(found.status).send({ message: found.message });
+
+    const { data, error } = parseBookInput(req.body);
+    if (!data) return res.status(400).send({ message: error });
+
+    const updated = await (await booksCollection()).findOneAndUpdate(
+      { _id: found.book._id },
+      { $set: data },
+      { returnDocument: "after" }
+    );
+    res.send(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to update the book" });
+  }
+});
+
+// DELETE /books/:id — private, owner only. Blocked while someone has it borrowed.
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const found = await findOwnedBook(String(req.params.id), req.user!.email);
+    if (!found.book) return res.status(found.status).send({ message: found.message });
+
+    const activeBorrows = await (await borrowsCollection()).countDocuments({ bookId: found.book._id });
+    if (activeBorrows > 0) {
+      return res.status(409).send({ message: "This book is currently borrowed and can't be deleted" });
+    }
+
+    await (await booksCollection()).deleteOne({ _id: found.book._id });
+    res.send({ message: "Book deleted", deletedId: found.book._id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to delete the book" });
   }
 });
 
