@@ -8,12 +8,13 @@ import borrowsRouter from "./routes/borrows.js";
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(
-  cors({
-    origin: (process.env.CLIENT_URL || "http://localhost:3000").split(","),
-    credentials: true,
-  })
-);
+// CLIENT_URL can hold several sites, separated by commas (e.g. local + live)
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:3000")
+  .split(",")
+  .map((url) => url.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 app.use(express.json());
 
 app.get("/", (_req, res) => {
@@ -23,6 +24,10 @@ app.get("/", (_req, res) => {
 app.use("/books", booksRouter);
 app.use("/borrows", borrowsRouter);
 
+app.use((_req, res) => {
+  res.status(404).send({ message: "Route not found" });
+});
+
 getDb()
   .then(async (db) => {
     await db.command({ ping: 1 });
@@ -30,8 +35,11 @@ getDb()
   })
   .catch((err) => console.error("MongoDB connection failed:", err.message));
 
-app.listen(port, () => {
-  console.log(`BookNook server listening on port ${port}`);
-});
+// On Vercel the app runs as a serverless function, so it must not open its own port
+if (!process.env.VERCEL) {
+  app.listen(port, () => {
+    console.log(`BookNook server listening on port ${port}`);
+  });
+}
 
 export default app;
