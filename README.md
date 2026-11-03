@@ -2,6 +2,12 @@
 
 The Express + MongoDB API for **BookNook**, a small online library where readers add, borrow and return books.
 
+**Live API:** https://booknook-server-lyart.vercel.app
+
+**Live site:** https://booknook-client-p3li.vercel.app
+
+**Client repo:** https://github.com/FahimF22/booknook-client
+
 ## Features
 
 - REST API for books and borrows, stored in MongoDB
