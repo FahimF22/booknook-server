@@ -62,4 +62,43 @@ router.post("/", verifyToken, async (req, res) => {
   }
 });
 
+// GET /borrows — private. Only the logged-in user's borrows, newest first.
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const list = await (await borrowsCollection())
+      .find({ userEmail: req.user!.email })
+      .sort({ borrowDate: -1 })
+      .toArray();
+    res.send(list);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to load your borrowed books" });
+  }
+});
+
+// DELETE /borrows/:id — private. Return a book: remove the borrow and put the copy back.
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    if (!ObjectId.isValid(id)) return res.status(400).send({ message: "Invalid borrow id" });
+    const _id = new ObjectId(id);
+    const borrows = await borrowsCollection();
+
+    // Delete only if it belongs to this user (single step, so a double click can't return twice)
+    const removed = await borrows.findOneAndDelete({ _id, userEmail: req.user!.email });
+    if (!removed) {
+      const exists = await borrows.countDocuments({ _id });
+      return exists
+        ? res.status(403).send({ message: "You can only return books you borrowed" })
+        : res.status(404).send({ message: "Borrow record not found" });
+    }
+
+    await (await booksCollection()).updateOne({ _id: removed.bookId }, { $inc: { totalCopies: 1 } });
+    res.send({ message: "Book returned", returnedId: removed._id, bookId: removed.bookId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send({ message: "Failed to return the book" });
+  }
+});
+
 export default router;
